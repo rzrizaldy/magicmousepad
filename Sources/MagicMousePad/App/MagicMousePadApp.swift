@@ -23,6 +23,8 @@ private struct MenuContent: View {
         Text(statusLine)
         Toggle("Gestures On", isOn: $state.enabled)
             .keyboardShortcut("p", modifiers: [.option, .command])
+        Toggle("Show Floating Guide", isOn: $state.showHUD)
+            .keyboardShortcut("g", modifiers: [.option, .command])
         if let g = state.lastGesture {
             Text("Last: \(g.title) → \(state.action(for: g).title)")
         }

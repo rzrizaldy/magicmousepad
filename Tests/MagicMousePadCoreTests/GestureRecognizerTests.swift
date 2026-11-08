@@ -124,6 +124,58 @@ final class GestureRecognizerTests: XCTestCase {
         XCTAssertEqual(fired, [.pinchOut, .pinchIn])
     }
 
+    func testOneFingerTap() {
+        recognizer.process([TouchPoint(id: 1, x: 0.5, y: 0.6)], at: 0)
+        recognizer.process([TouchPoint(id: 1, x: 0.5, y: 0.6)], at: 0.08)
+        recognizer.process([], at: 0.12)
+        XCTAssertEqual(fired, [.oneFingerTap])
+    }
+
+    func testOneFingerTapIgnoresRestingAndClicks() {
+        // Held too long
+        recognizer.process([TouchPoint(id: 1, x: 0.5, y: 0.6)], at: 0)
+        recognizer.process([], at: 0.5)
+        // Physical click
+        recognizer.process([TouchPoint(id: 2, x: 0.5, y: 0.6)], at: 1)
+        recognizer.noteClick()
+        recognizer.process([], at: 1.1)
+        // Slid across the surface
+        recognizer.process([TouchPoint(id: 3, x: 0.3, y: 0.6)], at: 2)
+        recognizer.process([TouchPoint(id: 3, x: 0.5, y: 0.6)], at: 2.05)
+        recognizer.process([], at: 2.1)
+        XCTAssertTrue(fired.isEmpty)
+    }
+
+    func testTwoFingerTapDoesNotAlsoFireOneFingerTap() {
+        let pts = [TouchPoint(id: 1, x: 0.3, y: 0.5), TouchPoint(id: 2, x: 0.6, y: 0.5)]
+        recognizer.process([pts[0]], at: 0)
+        recognizer.process(pts, at: 0.02)
+        recognizer.process([pts[0]], at: 0.1)
+        recognizer.process([], at: 0.12)
+        XCTAssertEqual(fired, [.twoFingerTap])
+    }
+
+    func testTrackpadProfileMatchesThisMacsSettings() {
+        let prefs: [String: Int] = ["Clicking": 1, "TrackpadRightClick": 1, "TrackpadPinch": 1,
+                                    "TrackpadThreeFingerHorizSwipeGesture": 2, "TrackpadThreeFingerVertSwipeGesture": 2,
+                                    "TrackpadThreeFingerTapGesture": 0]
+        let m = TrackpadProfile.from(value: { prefs[$0] }, swipeNavigateWithScrolls: nil).mapping
+        XCTAssertEqual(m[.oneFingerTap], .click)
+        XCTAssertEqual(m[.twoFingerTap], .secondaryClick)
+        XCTAssertEqual(m[.twoFingerSwipeRight], .back)
+        XCTAssertEqual(m[.twoFingerSwipeUp], ActionKind.none, "two fingers up/down must stay free for scrolling")
+        XCTAssertEqual(m[.pinchOut], .zoomIn)
+        XCTAssertEqual(m[.threeFingerSwipeLeft], .nextSpace)
+        XCTAssertEqual(m[.threeFingerSwipeUp], .missionControl)
+        XCTAssertEqual(m[.threeFingerSwipeDown], .appExpose)
+        XCTAssertEqual(m[.threeFingerTap], ActionKind.none)
+    }
+
+    func testFactoryTrackpadHasNoTapToClick() {
+        XCTAssertEqual(TrackpadProfile.factory.mapping[.oneFingerTap], ActionKind.none)
+        XCTAssertEqual(TrackpadProfile.factory.mapping[.threeFingerSwipeLeft], .nextSpace) // from 4-finger default
+    }
+
     func testSensitivityMapping() {
         XCTAssertEqual(RecognizerConfig.swipeDistance(forSensitivity: 0), 20)
         XCTAssertEqual(RecognizerConfig.swipeDistance(forSensitivity: 1), 6)

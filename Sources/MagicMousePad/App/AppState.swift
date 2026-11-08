@@ -12,7 +12,7 @@ final class AppState: ObservableObject {
     // MARK: Preferences (persisted)
 
     @Published var enabled: Bool { didSet { save(); pushConfig() } }
-    @Published var mapping: [MouseGesture: ActionKind] { didSet { save(); pushConfig(); refreshConflicts() } }
+    @Published var mapping: [MouseGesture: ActionKind] { didSet { save(); pushConfig(); refreshConflicts(); matchesTrackpad = mapping == TrackpadProfile.current().mapping } }
     @Published var sensitivity: Double { didSet { save(); pushConfig() } }
     @Published var pauseScrollDuringGestures: Bool { didSet { save() } }
     @Published var threeFingerClickIsMiddleClick: Bool { didSet { save() } }
@@ -28,6 +28,9 @@ final class AppState: ObservableObject {
     @Published private(set) var liveTouches: [TouchPoint] = []
     @Published private(set) var batteryPercent: Int?
     @Published private(set) var conflicts: [NativeGestureConflict] = []
+    /// What "Match my trackpad" copied, shown in the window.
+    @Published private(set) var trackpadSummary: [String] = []
+    @Published private(set) var matchesTrackpad = false
     @Published var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled {
         didSet { LaunchAtLogin.set(launchAtLogin) }
     }
@@ -74,13 +77,18 @@ final class AppState: ObservableObject {
         eventFilter.shouldPauseScroll = { [weak self] in
             guard let self else { return false }
             let fingers = TouchEngine.shared.currentFingerCount
-            return self.enabled && self.pauseScrollDuringGestures && fingers >= 2 && self.hasActions(forFingers: fingers)
+            return self.enabled && self.pauseScrollDuringGestures && self.shouldPauseScroll(fingers: fingers)
         }
         eventFilter.shouldConvertToMiddleClick = { [weak self] in
             guard let self else { return false }
             return self.enabled && self.threeFingerClickIsMiddleClick && TouchEngine.shared.currentFingerCount >= 3
         }
         eventFilter.onPhysicalClick = { TouchEngine.shared.noteClick() }
+
+        // First launch: make the mouse surface behave exactly like this Mac's trackpad.
+        if !defaults.bool(forKey: Keys.matchedTrackpad) { matchTrackpad() }
+        trackpadSummary = TrackpadProfile.current().summary
+        matchesTrackpad = mapping == TrackpadProfile.current().mapping
 
         startEventFilterWhenTrusted()
         refreshConflicts()
@@ -123,6 +131,7 @@ final class AppState: ObservableObject {
     /// Fills live status with sample values for the README screenshot (`--snapshot`).
     func loadDemoState() {
         liveTouches = [TouchPoint(id: 1, x: 0.30, y: 0.66), TouchPoint(id: 2, x: 0.66, y: 0.70)]
+        matchTrackpad()
         lastGesture = .twoFingerSwipeRight
         lastGestureDate = Date()
         batteryPercent = 100
@@ -151,8 +160,29 @@ final class AppState: ObservableObject {
         mapping.contains { $0.key.fingers == fingers && $0.value != .none }
     }
 
+    /// Two fingers keep scrolling (like a trackpad) unless two-finger up/down is assigned.
+    /// Three fingers never scroll while a three-finger gesture is assigned.
+    func shouldPauseScroll(fingers: Int) -> Bool {
+        switch fingers {
+        case ..<2: return false
+        case 2: return action(for: .twoFingerSwipeUp) != .none || action(for: .twoFingerSwipeDown) != .none
+        default: return hasActions(forFingers: 3)
+        }
+    }
+
+    /// Copies the trackpad's gesture settings onto the mouse surface.
+    func matchTrackpad() {
+        let profile = TrackpadProfile.current()
+        mapping = profile.mapping
+        invertVertical = false
+        pauseScrollDuringGestures = true
+        trackpadSummary = profile.summary
+        matchesTrackpad = true
+        defaults.set(true, forKey: Keys.matchedTrackpad)
+    }
+
     func restoreDefaults() {
-        mapping = DefaultMapping.mapping
+        matchTrackpad()
         sensitivity = 0.5
         pauseScrollDuringGestures = true
         threeFingerClickIsMiddleClick = true
@@ -180,6 +210,7 @@ final class AppState: ObservableObject {
         static let threeFingerClick = "threeFingerClickIsMiddleClick"
         static let showHUD = "showHUD"
         static let invertVertical = "invertVertical"
+        static let matchedTrackpad = "matchedTrackpad"
     }
 
     private static func loadMapping(from d: UserDefaults) -> [MouseGesture: ActionKind] {

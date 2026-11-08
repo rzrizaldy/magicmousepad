@@ -25,27 +25,34 @@ The Magic Mouse has always been a small multi-touch surface wearing a mouse's cl
 
 MagicMousePad closes that gap with five ideas:
 
-1. **The trackpad you already know.** The defaults mirror the macOS trackpad: two fingers to go back and forward, three fingers to move between Spaces, swipe up for Mission Control. Zero new vocabulary.
+1. **The trackpad you already know.** It copies your own trackpad settings: tap to click, two-finger right-click and scroll, pinch to zoom, three-finger Spaces and Mission Control. Zero new vocabulary.
 2. **Click where you are.** The whole shell is one button, but the surface knows how many fingers are on it. Click with three fingers and you get a real **middle click** — something the Magic Mouse never had.
-3. **Feedback without haptics.** There's no Taptic Engine in a mouse, so every gesture is confirmed with a brief glass HUD. You always know it worked.
+3. **Feedback without haptics.** There's no Taptic Engine in a mouse, so every gesture is confirmed with a brief floating guide. You always know it worked — and you can hide it once you trust it.
 4. **One gesture, one result.** When macOS's own mouse gestures overlap with yours, the app tells you exactly which setting to turn off. Scrolling pauses while a multi-finger gesture is on the surface so pages don't jump.
 5. **Fewer, better gestures.** A curved 5 × 9 cm surface isn't a trackpad. Only gestures that are comfortable on it are offered, and swipe distance is measured in millimetres for your exact mouse, so every generation feels the same.
 
 ## Gestures
 
-| Fingers | Gesture | Default action |
+**Trackpad mode is the default.** On first launch MagicMousePad reads *your* trackpad settings (System Settings › Trackpad) and copies them onto the mouse surface. The pointer still moves with the mouse; only the top surface becomes a trackpad. Change your trackpad later? Click **Re-sync**.
+
+With a typical trackpad setup that means:
+
+| Fingers | Gesture | Action |
 |---|---|---|
+| 1 | Tap | Click (when *Tap to click* is on; tap twice to double-click) |
+| 2 | Tap | Secondary click |
+| 2 | Move up / down | Scroll, exactly as before |
 | 2 | Swipe right / left | Back / Forward |
-| 2 | Swipe up / down | Mission Control / App Exposé |
-| 2 | Tap · Pinch in · Pinch out | Off (assignable) |
-| 3 | Swipe left / right | Next Space / Previous Space |
-| 3 | Swipe up / down | Show Desktop / Show Apps |
-| 3 | Tap | Middle Click |
-| 3 | **Physical click** | **Middle Click** |
+| 2 | Pinch out / in | Zoom in / out |
+| 3 | Swipe left / right | Next / Previous Space |
+| 3 | Swipe up / down | Mission Control / App Exposé |
+| 3 | **Physical click** | **Middle click** — a bonus the Magic Mouse never had |
 
-Every gesture can be reassigned to: Mission Control, App Exposé, Show Desktop, Show Apps, Next/Previous Space, Back, Forward, Next/Previous Tab, Close Tab, Middle Click, Zoom In/Out, Actual Size — or nothing.
+Four-finger trackpad gestures fold into three-finger ones, since three is the most a Magic Mouse comfortably holds.
 
-One-finger scrolling, secondary click and smart zoom keep working exactly as macOS provides them.
+Every gesture can be reassigned to: Click, Secondary Click, Middle Click, Look Up, Mission Control, App Exposé, Show Desktop, Show Apps, Next/Previous Space, Back, Forward, Next/Previous Tab, Close Tab, Zoom In/Out, Actual Size — or nothing.
+
+The **floating guide** (a small glass card confirming each gesture) can be hidden with the switch in the window, from the menu bar, or with **⌥⌘G**.
 
 ## Install
 
@@ -60,7 +67,7 @@ The app lives in your menu bar (the mouse icon). Click it to pause gestures, see
 
 ### Tips
 
-- **Turn off overlapping macOS gestures.** In System Settings › Mouse › More Gestures, turn off *Swipe between full-screen applications* if you keep two-finger left/right mapped. The app shows a banner when it detects this.
+- **Turn off overlapping macOS gestures.** In System Settings › Mouse › More Gestures, turn off *Swipe between full-screen applications* and *Mission Control* (two-finger double-tap). The app shows a banner when it detects either.
 - **Switching Spaces** uses the standard *Move left/right a space* shortcuts (⌃← / ⌃→). They're on by default; if you've disabled them, re-enable them in System Settings › Keyboard › Keyboard Shortcuts › Mission Control.
 - **Rebuilt the app yourself?** Each new ad-hoc build has a new signature, so macOS may ask for Accessibility again. Remove the old entry and add the new one.
 

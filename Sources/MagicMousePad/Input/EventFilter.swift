@@ -10,6 +10,9 @@ final class EventFilter {
     var shouldConvertToMiddleClick: () -> Bool = { false }
     var onPhysicalClick: () -> Void = {}
 
+    /// Stamped on clicks the app posts itself (tap to click), so they're never mistaken for physical ones.
+    static let syntheticMarker: Int64 = 0x4D4D_5044 // "MMPD"
+
     private var tap: CFMachPort?
     private var converting = false
 
@@ -55,6 +58,9 @@ final class EventFilter {
             return shouldPauseScroll() ? nil : Unmanaged.passUnretained(event)
 
         case .leftMouseDown, .rightMouseDown:
+            if event.getIntegerValueField(.eventSourceUserData) == Self.syntheticMarker {
+                return Unmanaged.passUnretained(event)
+            }
             onPhysicalClick()
             if shouldConvertToMiddleClick() {
                 converting = true

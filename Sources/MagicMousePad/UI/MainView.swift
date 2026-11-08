@@ -12,15 +12,19 @@ struct MainView: View {
                 VStack(spacing: 16) {
                     heroCard
                     if !state.accessibilityGranted { permissionCard }
-                    ForEach(state.conflicts) { conflictCard($0) }
+                    if !state.conflicts.isEmpty { conflictCard(state.conflicts) }
                 }
                 .frame(width: 380)
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
-                        gestureCard(title: "Two fingers", subtitle: "Index + middle finger",
+                        trackpadCard
+                        gestureCard(title: "One finger", subtitle: "Pointer and scrolling stay exactly as macOS does them",
+                                    gestures: [.oneFingerTap])
+                        gestureCard(title: "Two fingers",
+                                    subtitle: state.shouldPauseScroll(fingers: 2) ? "Index + middle finger" : "Up and down still scroll, like a trackpad",
                                     gestures: MouseGesture.allCases.filter { $0.fingers == 2 })
-                        gestureCard(title: "Three fingers", subtitle: "Spaces, desktop and middle click",
+                        gestureCard(title: "Three fingers", subtitle: "Spaces and Mission Control · click for middle click",
                                     gestures: MouseGesture.allCases.filter { $0.fingers == 3 })
                         feelCard
                         footer
@@ -72,6 +76,15 @@ struct MainView: View {
                           detail: state.accessibilityGranted ? "Allowed" : "Needed to perform actions")
             }
             .padding(.top, 14)
+
+            Toggle(isOn: $state.showHUD) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Show floating guide").font(.system(size: 13, weight: .semibold))
+                    Text("A brief card on screen confirming each gesture").font(.system(size: 11)).foregroundStyle(Theme.secondary)
+                }
+            }
+            .toggleStyle(GoldToggleStyle())
+            .padding(.top, 12)
         }
         .glassCard(radius: 26, padding: 22)
     }
@@ -124,9 +137,10 @@ struct MainView: View {
                button: "Allow…") { state.requestAccessibility() }
     }
 
-    private func conflictCard(_ conflict: NativeGestureConflict) -> some View {
-        banner(icon: "exclamationmark.triangle",
-               text: Text("**macOS also uses this gesture.** Turn off “\(conflict.settingName)” in Mouse settings so only one thing happens."),
+    private func conflictCard(_ conflicts: [NativeGestureConflict]) -> some View {
+        let names = conflicts.map { "“\($0.settingName)”" }.joined(separator: " and ")
+        return banner(icon: "exclamationmark.triangle",
+               text: Text("**macOS also uses \(conflicts.count == 1 ? "this gesture" : "these gestures").** In Mouse settings › More Gestures, turn off \(names)."),
                button: "Open") { Permissions.openMouseSettings() }
     }
 
@@ -147,7 +161,32 @@ struct MainView: View {
         .shadow(color: Theme.goldDeep.opacity(0.14), radius: 15, y: 10)
     }
 
-    // MARK: MouseGesture grid
+    // MARK: Trackpad match
+
+    private var trackpadCard: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: state.matchesTrackpad ? "checkmark" : "rectangle.and.hand.point.up.left")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(Theme.goldText)
+                .frame(width: 44, height: 44)
+                .background(Theme.goldTile, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(state.matchesTrackpad ? "Works like your trackpad" : "Match my trackpad")
+                    .font(.system(size: 15, weight: .bold))
+                Text(state.trackpadSummary.joined(separator: " · "))
+                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(state.matchesTrackpad ? "Re-sync" : "Match Trackpad") { state.matchTrackpad() }
+                .buttonStyle(GoldButtonStyle())
+                .help("Copy this Mac's trackpad gesture settings onto the mouse surface")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(radius: 24, padding: 16)
+    }
+
+    // MARK: Gesture grid
 
     private func gestureCard(title: String, subtitle: String, gestures: [MouseGesture]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -183,7 +222,6 @@ struct MainView: View {
                 Text("Short").font(.system(size: 12)).foregroundStyle(Theme.secondary)
             }
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 28), GridItem(.flexible(), spacing: 28)], spacing: 12) {
-                Toggle("Show gesture HUD", isOn: $state.showHUD)
                 Toggle("Pause scrolling while gesturing", isOn: $state.pauseScrollDuringGestures)
                 Toggle("Three-finger click is middle click", isOn: $state.threeFingerClickIsMiddleClick)
                 Toggle("Open at login", isOn: $state.launchAtLogin)

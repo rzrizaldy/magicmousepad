@@ -21,7 +21,10 @@ enum ActionPerformer {
         case .previousTab: key(Key.tab, [.maskControl, .maskShift])
         case .closeTab: key(Key.w, .maskCommand)
 
-        case .middleClick: middleClick()
+        case .click: click(.left)
+        case .secondaryClick: click(.right)
+        case .middleClick: click(.center)
+        case .lookUp: key(Key.d, [.maskControl, .maskCommand])
         case .zoomIn: key(Key.equal, .maskCommand)
         case .zoomOut: key(Key.minus, .maskCommand)
         case .resetZoom: key(Key.zero, .maskCommand)
@@ -40,6 +43,7 @@ enum ActionPerformer {
         static let equal: CGKeyCode = 24
         static let minus: CGKeyCode = 27
         static let zero: CGKeyCode = 29
+        static let d: CGKeyCode = 2
     }
 
     private static func key(_ code: CGKeyCode, _ flags: CGEventFlags) {
@@ -53,13 +57,31 @@ enum ActionPerformer {
 
     // MARK: - Mouse
 
-    private static func middleClick() {
+    private static var lastClick: (time: Date, location: CGPoint, button: CGMouseButton, count: Int64)?
+
+    /// Posts a click at the pointer. Two quick taps in the same place become a real double-click.
+    private static func click(_ button: CGMouseButton) {
         let location = CGEvent(source: nil)?.location ?? .zero
+        var count: Int64 = 1
+        if let last = lastClick, last.button == button,
+           Date().timeIntervalSince(last.time) < NSEvent.doubleClickInterval,
+           hypot(last.location.x - location.x, last.location.y - location.y) < 6 {
+            count = min(last.count + 1, 3)
+        }
+        lastClick = (Date(), location, button, count)
+
+        let types: (CGEventType, CGEventType) = switch button {
+        case .left: (.leftMouseDown, .leftMouseUp)
+        case .right: (.rightMouseDown, .rightMouseUp)
+        default: (.otherMouseDown, .otherMouseUp)
+        }
         let source = CGEventSource(stateID: .hidSystemState)
-        for type in [CGEventType.otherMouseDown, .otherMouseUp] {
-            let event = CGEvent(mouseEventSource: source, mouseType: type,
-                                mouseCursorPosition: location, mouseButton: .center)
-            event?.post(tap: .cghidEventTap)
+        for type in [types.0, types.1] {
+            guard let event = CGEvent(mouseEventSource: source, mouseType: type,
+                                      mouseCursorPosition: location, mouseButton: button) else { continue }
+            event.setIntegerValueField(.mouseEventClickState, value: count)
+            event.setIntegerValueField(.eventSourceUserData, value: EventFilter.syntheticMarker)
+            event.post(tap: .cghidEventTap)
         }
     }
 

@@ -33,6 +33,9 @@ public struct RecognizerConfig: Equatable, Sendable {
     /// A tap is a quick touch-and-lift with almost no movement.
     public var tapMaxDuration: TimeInterval = 0.25
     public var tapMaxMovementMM: Double = 3
+    /// A one-finger tap must be quicker and stiller, so resting or re-gripping never clicks.
+    public var singleTapMaxDuration: TimeInterval = 0.18
+    public var singleTapMaxMovementMM: Double = 2
 
     /// Flip the up/down direction.
     public var invertVertical: Bool = false
@@ -50,7 +53,8 @@ public struct RecognizerConfig: Equatable, Sendable {
 ///
 /// A *gesture window* opens when two or more fingers are on the surface and
 /// closes when fewer than two remain, so a resting index finger never blocks
-/// a gesture. At most one gesture fires per window.
+/// a gesture. At most one gesture fires per window. A one-finger tap is tracked
+/// separately and only counts when the finger lands on an empty surface.
 public final class GestureRecognizer {
     public var config: RecognizerConfig
     public var onGesture: ((MouseGesture) -> Void)?
@@ -71,6 +75,13 @@ public final class GestureRecognizer {
     private var phaseStart: TimeInterval = 0
     private var phaseAnchor: [Int32: TouchPoint] = [:]
 
+    // One-finger tap state (a touch that starts from an empty surface)
+    private var soloActive = false
+    private var soloInvalid = false
+    private var soloStart: TimeInterval = 0
+    private var soloOrigin: TouchPoint?
+    private var previousCount = 0
+
     public init(config: RecognizerConfig = RecognizerConfig()) {
         self.config = config
     }
@@ -78,6 +89,7 @@ public final class GestureRecognizer {
     /// Call when a physical click happens; a click cancels any tap in progress.
     public func noteClick() {
         if inWindow { windowClicked = true }
+        if soloActive { soloInvalid = true }
     }
 
     public func reset() {
@@ -86,6 +98,8 @@ public final class GestureRecognizer {
         phaseCount = 0
         phaseAnchor = [:]
         windowOrigin = [:]
+        soloActive = false
+        previousCount = 0
     }
 
     /// Feed one frame of active contacts (fingers actually touching).
@@ -114,9 +128,33 @@ public final class GestureRecognizer {
         }
 
         if count < 2 && inWindow { closeWindow(at: time) }
+        trackSingleTap(touches, at: time)
+        previousCount = count
     }
 
     // MARK: - Private
+
+    private func trackSingleTap(_ touches: [TouchPoint], at time: TimeInterval) {
+        let count = touches.count
+        if !soloActive {
+            guard count == 1, previousCount == 0 else { return }
+            soloActive = true
+            soloInvalid = false
+            soloStart = time
+            soloOrigin = touches[0]
+            return
+        }
+        if count >= 2 { soloInvalid = true }
+        if count == 1, let origin = soloOrigin {
+            if touches[0].id != origin.id || distanceMM(origin, touches[0]) > config.singleTapMaxMovementMM {
+                soloInvalid = true
+            }
+        }
+        if count == 0 {
+            soloActive = false
+            if !soloInvalid && time - soloStart <= config.singleTapMaxDuration { onGesture?(.oneFingerTap) }
+        }
+    }
 
     private func openWindow(at time: TimeInterval) {
         inWindow = true

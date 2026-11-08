@@ -63,6 +63,22 @@ enum Battery {
     }
 }
 
+extension TrackpadProfile {
+    /// Reads this Mac's trackpad settings (built-in and Magic Trackpad share them).
+    static func current() -> TrackpadProfile {
+        let domains = ["com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad"]
+        domains.forEach { CFPreferencesAppSynchronize($0 as CFString) }
+        func value(_ key: String) -> Int? {
+            for domain in domains {
+                if let n = CFPreferencesCopyAppValue(key as CFString, domain as CFString) as? NSNumber { return n.intValue }
+            }
+            return nil
+        }
+        let swipeNav = (UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleEnableSwipeNavigateWithScrolls"] as? NSNumber)?.boolValue
+        return .from(value: value, swipeNavigateWithScrolls: swipeNav)
+    }
+}
+
 /// A built-in macOS Magic Mouse gesture that overlaps with one of ours.
 struct NativeGestureConflict: Identifiable, Equatable {
     let id: String
@@ -81,13 +97,13 @@ struct NativeGestureConflict: Identifiable, Equatable {
     }
 
     static func detect(mapping: [MouseGesture: ActionKind]) -> [NativeGestureConflict] {
-        func used(_ gestures: [MouseGesture]) -> Bool { gestures.contains { (mapping[$0] ?? .none) != .none } }
+        func used(_ gestures: [MouseGesture]) -> Bool { gestures.contains { (mapping[$0] ?? ActionKind.none) != ActionKind.none } }
         var result: [NativeGestureConflict] = []
         if nativeValue("MouseTwoFingerHorizSwipeGesture") != 0, used([.twoFingerSwipeLeft, .twoFingerSwipeRight]) {
             result.append(.init(id: "swipe", settingName: "Swipe between full-screen applications"))
         }
         if nativeValue("MouseTwoFingerDoubleTapGesture") != 0, used([.twoFingerTap]) {
-            result.append(.init(id: "doubletap", settingName: "Mission Control (double-tap with two fingers)"))
+            result.append(.init(id: "doubletap", settingName: "Mission Control"))
         }
         return result
     }

@@ -1,7 +1,9 @@
 import Foundation
 
-/// A multi-finger gesture performed on the Magic Mouse surface.
+/// A gesture performed on the Magic Mouse surface.
 public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable {
+    case oneFingerTap
+
     case twoFingerSwipeLeft
     case twoFingerSwipeRight
     case twoFingerSwipeUp
@@ -20,6 +22,8 @@ public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable 
 
     public var fingers: Int {
         switch self {
+        case .oneFingerTap:
+            return 1
         case .twoFingerSwipeLeft, .twoFingerSwipeRight, .twoFingerSwipeUp, .twoFingerSwipeDown,
              .twoFingerTap, .pinchIn, .pinchOut:
             return 2
@@ -36,14 +40,14 @@ public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable 
         case .twoFingerSwipeRight, .threeFingerSwipeRight: return "Swipe right"
         case .twoFingerSwipeUp, .threeFingerSwipeUp: return "Swipe up"
         case .twoFingerSwipeDown, .threeFingerSwipeDown: return "Swipe down"
-        case .twoFingerTap, .threeFingerTap: return "Tap"
+        case .oneFingerTap, .twoFingerTap, .threeFingerTap: return "Tap"
         case .pinchIn: return "Pinch in"
         case .pinchOut: return "Pinch out"
         }
     }
 
     public var title: String {
-        let count = fingers == 2 ? "Two-finger" : "Three-finger"
+        let count = ["One-finger", "Two-finger", "Three-finger"][min(max(fingers, 1), 3) - 1]
         switch self {
         case .pinchIn, .pinchOut: return shortTitle
         default: return "\(count) \(shortTitle.lowercased())"
@@ -57,7 +61,7 @@ public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable 
         case .twoFingerSwipeRight, .threeFingerSwipeRight: return "arrow.right"
         case .twoFingerSwipeUp, .threeFingerSwipeUp: return "arrow.up"
         case .twoFingerSwipeDown, .threeFingerSwipeDown: return "arrow.down"
-        case .twoFingerTap, .threeFingerTap: return "hand.tap"
+        case .oneFingerTap, .twoFingerTap, .threeFingerTap: return "hand.tap"
         case .pinchIn: return "arrow.down.right.and.arrow.up.left"
         case .pinchOut: return "arrow.up.left.and.arrow.down.right"
         }
@@ -81,6 +85,7 @@ public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable 
 
     public static func tap(fingers: Int) -> MouseGesture? {
         switch fingers {
+        case 1: return .oneFingerTap
         case 2: return .twoFingerTap
         case 3: return .threeFingerTap
         default: return nil

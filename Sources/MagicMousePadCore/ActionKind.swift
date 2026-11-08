@@ -20,7 +20,10 @@ public enum ActionKind: String, CaseIterable, Codable, Identifiable, Sendable {
     case closeTab
 
     // Pointer & view
+    case click
+    case secondaryClick
     case middleClick
+    case lookUp
     case zoomIn
     case zoomOut
     case resetZoom
@@ -41,7 +44,10 @@ public enum ActionKind: String, CaseIterable, Codable, Identifiable, Sendable {
         case .nextTab: return "Next Tab"
         case .previousTab: return "Previous Tab"
         case .closeTab: return "Close Tab"
+        case .click: return "Click"
+        case .secondaryClick: return "Secondary Click"
         case .middleClick: return "Middle Click"
+        case .lookUp: return "Look Up"
         case .zoomIn: return "Zoom In"
         case .zoomOut: return "Zoom Out"
         case .resetZoom: return "Actual Size"
@@ -62,7 +68,10 @@ public enum ActionKind: String, CaseIterable, Codable, Identifiable, Sendable {
         case .nextTab: return "arrow.right.to.line"
         case .previousTab: return "arrow.left.to.line"
         case .closeTab: return "xmark.square"
+        case .click: return "cursorarrow.click"
+        case .secondaryClick: return "cursorarrow.click.2"
         case .middleClick: return "computermouse"
+        case .lookUp: return "character.book.closed"
         case .zoomIn: return "plus.magnifyingglass"
         case .zoomOut: return "minus.magnifyingglass"
         case .resetZoom: return "1.magnifyingglass"
@@ -80,7 +89,7 @@ public enum ActionKind: String, CaseIterable, Codable, Identifiable, Sendable {
         case .none: return nil
         case .missionControl, .appExpose, .showDesktop, .showApps, .nextSpace, .previousSpace: return .system
         case .back, .forward, .nextTab, .previousTab, .closeTab: return .navigation
-        case .middleClick, .zoomIn, .zoomOut, .resetZoom: return .view
+        case .click, .secondaryClick, .middleClick, .lookUp, .zoomIn, .zoomOut, .resetZoom: return .view
         }
     }
 
@@ -89,23 +98,8 @@ public enum ActionKind: String, CaseIterable, Codable, Identifiable, Sendable {
     }
 }
 
-/// Default mapping, modelled after the macOS trackpad defaults.
+/// Default mapping: the macOS trackpad's factory gestures, translated to the mouse.
+/// (On first launch the app replaces this with the user's own trackpad settings — see `TrackpadProfile`.)
 public enum DefaultMapping {
-    public static let mapping: [MouseGesture: ActionKind] = [
-        // Two fingers — like a trackpad's two-finger swipe between pages.
-        .twoFingerSwipeLeft: .forward,
-        .twoFingerSwipeRight: .back,
-        .twoFingerSwipeUp: .missionControl,
-        .twoFingerSwipeDown: .appExpose,
-        .twoFingerTap: .none,
-        .pinchIn: .none,
-        .pinchOut: .none,
-
-        // Three fingers — like a trackpad's three-finger swipe between Spaces.
-        .threeFingerSwipeLeft: .nextSpace,
-        .threeFingerSwipeRight: .previousSpace,
-        .threeFingerSwipeUp: .showDesktop,
-        .threeFingerSwipeDown: .showApps,
-        .threeFingerTap: .middleClick,
-    ]
+    public static let mapping: [MouseGesture: ActionKind] = TrackpadProfile.factory.mapping
 }
