@@ -79,7 +79,7 @@ enum ActionPerformer {
             return
         }
         let url = URL(fileURLWithPath: "/System/Applications/Mission Control.app/Contents/MacOS/Mission Control")
-        try? Process.run(url, arguments: fallbackArgs)
+        _ = try? Process.run(url, arguments: fallbackArgs)
     }
 
     private static func openApps() {

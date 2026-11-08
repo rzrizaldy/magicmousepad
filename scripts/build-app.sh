@@ -14,11 +14,11 @@ ARCHS="${ARCHS:-arm64 x86_64}"
 arch_flags=()
 for a in $ARCHS; do arch_flags+=(--arch "$a"); done
 
-echo "→ Compiling ($ARCHS)…"
+echo "→ Compiling (${ARCHS})…"
 swift build -c release "${arch_flags[@]}"
 BIN_DIR="$(swift build -c release "${arch_flags[@]}" --show-bin-path)"
 
-echo "→ Assembling $APP…"
+echo "→ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/$APP_NAME" "$APP/Contents/MacOS/$APP_NAME"
