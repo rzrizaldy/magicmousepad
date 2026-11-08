@@ -1,0 +1,11 @@
+.DS_Store
+.build/
+.swiftpm/
+build/
+*.xcodeproj/
+xcuserdata/
+DerivedData/
+
+# Third-party apps / archives never belong in this repo
+*.zip
+*.dmg
