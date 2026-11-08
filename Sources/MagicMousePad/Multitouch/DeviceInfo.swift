@@ -37,6 +37,20 @@ struct DeviceInfo: Identifiable, Equatable {
         }
     }
 
+    /// Sample device for README screenshots (`--snapshot`).
+    static let demo = DeviceInfo(index: 0, familyID: 112, productID: 0x0323, builtIn: false,
+                                 transport: "Bluetooth", widthMM: 51.5, heightMM: 90.6)
+
+    private init(index: Int32, familyID: Int, productID: Int, builtIn: Bool, transport: String, widthMM: Double, heightMM: Double) {
+        self.index = index
+        self.familyID = familyID
+        self.productID = productID
+        self.builtIn = builtIn
+        self.transport = transport
+        self.widthMM = widthMM
+        self.heightMM = heightMM
+    }
+
     init(index: Int32, service: io_service_t) {
         func prop(_ key: String) -> Any? {
             IORegistryEntrySearchCFProperty(

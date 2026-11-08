@@ -6,305 +6,385 @@ struct MainView: View {
     @State private var pulse = 0
 
     var body: some View {
-        ZStack {
-            PearlBackground()
-            HStack(alignment: .top, spacing: 22) {
-                VStack(spacing: 16) {
-                    heroCard
-                    if !state.accessibilityGranted { permissionCard }
-                    if !state.conflicts.isEmpty { conflictCard(state.conflicts) }
-                }
-                .frame(width: 380)
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        trackpadCard
-                        gestureCard(title: "One finger", subtitle: "Pointer and scrolling stay exactly as macOS does them",
-                                    gestures: [.oneFingerTap])
-                        gestureCard(title: "Two fingers",
-                                    subtitle: state.shouldPauseScroll(fingers: 2) ? "Index + middle finger" : "Up and down still scroll, like a trackpad",
-                                    gestures: MouseGesture.allCases.filter { $0.fingers == 2 })
-                        gestureCard(title: "Three fingers", subtitle: "Spaces and Mission Control · click for middle click",
-                                    gestures: MouseGesture.allCases.filter { $0.fingers == 3 })
-                        feelCard
-                        footer
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 2)
-                    .padding(.bottom, 24)
-                }
-                .padding(.horizontal, -16)
+        HStack(spacing: 0) {
+            StatusPane(pulse: pulse)
+                .frame(width: 360)
+            Rectangle().fill(Theme.hairline.opacity(0.6)).frame(width: 0.5)
+            ScrollView(showsIndicators: false) {
+                SettingsPane(pulse: pulse)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 6)
+                    .padding(.bottom, 28)
             }
-            .padding(.horizontal, 26)
-            .padding(.top, 40)
-            .padding(.bottom, 22)
         }
-        .frame(width: 1100, height: 720)
+        .padding(.top, 34) // traffic lights live in the transparent title bar
+        .frame(width: 1120, height: 760)
+        .background(Theme.canvas)
         .foregroundStyle(Theme.ink)
         .onChange(of: state.lastGestureDate) { _ in pulse += 1 }
     }
+}
 
-    // MARK: Hero
+// MARK: - Status pane
 
-    private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("MagicMousePad").font(.system(size: 26, weight: .bold)).tracking(-0.4)
-                    Text("Your Magic Mouse, now a trackpad.")
-                        .font(.system(size: 13)).foregroundStyle(Theme.secondary)
-                }
+private struct StatusPane: View {
+    @EnvironmentObject private var state: AppState
+    let pulse: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack {
+                badge
                 Spacer()
-                Toggle(isOn: $state.enabled) { EmptyView() }
-                    .toggleStyle(GoldToggleStyle(width: 52, height: 30))
-                    .fixedSize()
-                    .help(state.enabled ? "Gestures are on" : "Gestures are paused")
+                Toggle("Gestures", isOn: $state.enabled)
+                    .toggleStyle(.switch).labelsHidden().tint(Theme.good)
+                    .help("Turn all gestures on or off (⌥⌘P)")
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(state.mouse == nil ? "No Magic Mouse" : "Magic Mouse")
+                    .font(Typo.hero).tracking(-0.6)
+                Text(subtitle).font(Typo.body).foregroundStyle(Theme.secondary)
             }
 
             IsoMouseView(touches: state.liveTouches, connected: state.mouse != nil, pulse: pulse)
                 .frame(maxWidth: .infinity)
+                .frame(height: 236)
 
-            lastGesturePill
-                .frame(maxWidth: .infinity)
+            stats
 
-            VStack(alignment: .leading, spacing: 8) {
-                statusRow(ok: state.mouse != nil,
-                          title: state.mouse?.name ?? "No Magic Mouse found",
-                          detail: mouseDetail)
-                statusRow(ok: state.accessibilityGranted,
-                          title: "Accessibility",
-                          detail: state.accessibilityGranted ? "Allowed" : "Needed to perform actions")
-            }
-            .padding(.top, 14)
-
-            Toggle(isOn: $state.showHUD) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Show floating guide").font(.system(size: 13, weight: .semibold))
-                    Text("A brief card on screen confirming each gesture").font(.system(size: 11)).foregroundStyle(Theme.secondary)
-                }
-            }
-            .toggleStyle(GoldToggleStyle())
-            .padding(.top, 12)
-        }
-        .glassCard(radius: 26, padding: 22)
-    }
-
-    private var mouseDetail: String {
-        guard let mouse = state.mouse else {
-            return state.multitouchAvailable ? "Turn it on or connect it" : "Multitouch is unavailable on this Mac"
-        }
-        var parts = [mouse.transport.isEmpty ? "Connected" : mouse.transport]
-        if let battery = state.batteryPercent { parts.append("\(battery)%") }
-        return parts.joined(separator: " · ")
-    }
-
-    @ViewBuilder private var lastGesturePill: some View {
-        HStack(spacing: 8) {
-            if let g = state.lastGesture {
-                Text(g.title).fontWeight(.semibold)
-                Image(systemName: "arrow.right").foregroundStyle(Theme.goldText)
-                Text(state.action(for: g).title).fontWeight(.semibold).foregroundStyle(Theme.goldText)
-            } else {
-                Image(systemName: "hand.point.up.left").foregroundStyle(Theme.goldText)
-                Text(state.mouse == nil ? "Waiting for your Magic Mouse" : "Try a two-finger swipe")
-                    .foregroundStyle(Theme.secondary)
-            }
-        }
-        .font(.system(size: 13))
-        .padding(.horizontal, 16)
-        .padding(.vertical, 9)
-        .background(Color.white.opacity(0.75), in: Capsule())
-        .overlay(Capsule().strokeBorder(Color.white, lineWidth: 1))
-        .shadow(color: Color(red: 0.47, green: 0.38, blue: 0.16).opacity(0.12), radius: 9, y: 6)
-        .animation(.spring(response: 0.3), value: state.lastGestureDate)
-    }
-
-    private func statusRow(ok: Bool, title: String, detail: String) -> some View {
-        HStack(spacing: 10) {
-            StatusDot(color: ok ? Theme.success : Theme.warning)
-            Text(title).fontWeight(.semibold)
-            Text(detail).foregroundStyle(Theme.secondary)
-            Spacer()
-        }
-        .font(.system(size: 13))
-    }
-
-    // MARK: Banners
-
-    private var permissionCard: some View {
-        banner(icon: "lock.shield",
-               text: Text("**Allow Accessibility** so MagicMousePad can switch Spaces, go back and click for you."),
-               button: "Allow…") { state.requestAccessibility() }
-    }
-
-    private func conflictCard(_ conflicts: [NativeGestureConflict]) -> some View {
-        let names = conflicts.map { "“\($0.settingName)”" }.joined(separator: " and ")
-        return banner(icon: "exclamationmark.triangle",
-               text: Text("**macOS also uses \(conflicts.count == 1 ? "this gesture" : "these gestures").** In Mouse settings › More Gestures, turn off \(names)."),
-               button: "Open") { Permissions.openMouseSettings() }
-    }
-
-    private func banner(icon: String, text: Text, button: String, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 18, weight: .semibold)).foregroundStyle(Theme.goldText)
-            text.font(.system(size: 12)).foregroundStyle(Color(red: 0.29, green: 0.23, blue: 0.07))
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Button(button, action: action).buttonStyle(GoldButtonStyle())
-        }
-        .padding(16)
-        .background(LinearGradient(colors: [Color(red: 1, green: 0.965, blue: 0.87).opacity(0.9),
-                                            Color(red: 0.988, green: 0.925, blue: 0.77).opacity(0.8)],
-                                   startPoint: .top, endPoint: .bottom),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(.white, lineWidth: 1))
-        .shadow(color: Theme.goldDeep.opacity(0.14), radius: 15, y: 10)
-    }
-
-    // MARK: Trackpad match
-
-    private var trackpadCard: some View {
-        HStack(alignment: .center, spacing: 14) {
-            Image(systemName: state.matchesTrackpad ? "checkmark" : "rectangle.and.hand.point.up.left")
-                .font(.system(size: 17, weight: .bold))
-                .foregroundStyle(Theme.goldText)
-                .frame(width: 44, height: 44)
-                .background(Theme.goldTile, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
-            VStack(alignment: .leading, spacing: 3) {
-                Text(state.matchesTrackpad ? "Works like your trackpad" : "Match my trackpad")
-                    .font(.system(size: 15, weight: .bold))
-                Text(state.trackpadSummary.joined(separator: " · "))
-                    .font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Button(state.matchesTrackpad ? "Re-sync" : "Match Trackpad") { state.matchTrackpad() }
-                .buttonStyle(GoldButtonStyle())
-                .help("Copy this Mac's trackpad gesture settings onto the mouse surface")
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 24, padding: 16)
-    }
-
-    // MARK: Gesture grid
-
-    private func gestureCard(title: String, subtitle: String, gestures: [MouseGesture]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(title).font(.system(size: 15, weight: .bold))
-                Text(subtitle).font(.system(size: 12)).foregroundStyle(Theme.secondary)
-            }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(gestures) { gesture in
-                    GestureTile(gesture: gesture,
-                                action: Binding(get: { state.action(for: gesture) },
-                                                set: { state.setAction($0, for: gesture) }),
-                                isFlashing: state.lastGesture == gesture && pulse > 0,
-                                pulse: pulse)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 24, padding: 18)
-    }
-
-    // MARK: Feel
-
-    private var feelCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Feel").font(.system(size: 15, weight: .bold))
-            HStack(spacing: 12) {
-                Text("Swipe distance").font(.system(size: 13, weight: .semibold)).frame(width: 110, alignment: .leading)
-                Text("Long").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-                Slider(value: $state.sensitivity, in: 0...1)
-                    .tint(Theme.goldDeep)
-                    .accessibilityLabel(Text("Swipe distance"))
-                Text("Short").font(.system(size: 12)).foregroundStyle(Theme.secondary)
-            }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 28), GridItem(.flexible(), spacing: 28)], spacing: 12) {
-                Toggle("Pause scrolling while gesturing", isOn: $state.pauseScrollDuringGestures)
-                Toggle("Three-finger click is middle click", isOn: $state.threeFingerClickIsMiddleClick)
-                Toggle("Open at login", isOn: $state.launchAtLogin)
-                Toggle("Invert up and down swipes", isOn: $state.invertVertical)
-            }
-            .toggleStyle(GoldToggleStyle())
-            .font(.system(size: 13))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(radius: 24, padding: 18)
-    }
-
-    private var footer: some View {
-        HStack {
-            Button("Restore Defaults") { state.restoreDefaults() }
-                .buttonStyle(.plain)
-                .foregroundStyle(Theme.goldText)
-            Spacer()
-            Link("Open source on GitHub", destination: URL(string: "https://github.com/rzrizaldy/magicmousepad")!)
-                .foregroundStyle(Theme.goldText)
-            Text("·").foregroundStyle(Theme.secondary)
-            Text("v\(Bundle.main.shortVersion)").foregroundStyle(Theme.secondary)
-        }
-        .font(.system(size: 12, weight: .medium))
-        .padding(.horizontal, 6)
-    }
-}
-
-/// One gesture → action tile.
-private struct GestureTile: View {
-    let gesture: MouseGesture
-    @Binding var action: ActionKind
-    var isFlashing: Bool
-    var pulse: Int
-    @State private var highlight = false
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: gesture.symbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.goldText)
-                .frame(width: 30, height: 30)
-                .background(Theme.goldTile, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            Text(gesture.shortTitle).font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
-                .fixedSize()
-            Spacer(minLength: 4)
-            Menu {
-                Picker("Action", selection: $action) {
-                    Label(ActionKind.none.title, systemImage: ActionKind.none.symbol).tag(ActionKind.none)
-                    ForEach(ActionKind.Group.allCases, id: \.self) { group in
-                        Section(group.rawValue) {
-                            ForEach(ActionKind.actions(in: group)) { a in
-                                Label(a.title, systemImage: a.symbol).tag(a)
-                            }
+            VStack(alignment: .leading, spacing: 4) {
+                DataLabel("Last gesture")
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    HStack(alignment: .center) {
+                        if let g = state.lastGesture {
+                            Text("\(g.title) → \(state.action(for: g).title)")
+                                .font(.system(size: 14, weight: .semibold))
+                            Spacer(minLength: 8)
+                            Text(ago(state.lastGestureDate, now: context.date))
+                                .font(Typo.mono).foregroundStyle(Theme.secondary)
+                        } else {
+                            Text(state.mouse == nil ? "Turn on or connect your Magic Mouse" : "Try a two-finger swipe")
+                                .font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.secondary)
                         }
                     }
                 }
-                .pickerStyle(.inline)
-                .labelsHidden()
+            }
+
+            Spacer(minLength: 0)
+            notices
+        }
+        .padding(.horizontal, 24)
+        .padding(.bottom, 22)
+    }
+
+    private var badge: some View {
+        if state.mouse == nil {
+            return StatusBadge(text: "No mouse", dot: Theme.tertiary, fill: Theme.idleFill, ink: Theme.secondary)
+        }
+        if !state.accessibilityGranted {
+            return StatusBadge(text: "Needs access", dot: Theme.warn, fill: Theme.warnFill, ink: Theme.warnText)
+        }
+        if !state.enabled {
+            return StatusBadge(text: "Paused", dot: Theme.tertiary, fill: Theme.idleFill, ink: Theme.secondary)
+        }
+        return StatusBadge(text: "Active", dot: Theme.good, fill: Theme.goodFill, ink: Theme.goodText)
+    }
+
+    private var subtitle: String {
+        guard let mouse = state.mouse else {
+            return state.multitouchAvailable ? "Turn it on or plug it in" : "Multitouch isn’t available on this Mac"
+        }
+        let model: String
+        switch mouse.productID {
+        case 0x0323: model = "USB‑C model"
+        case 0x0269: model = "Magic Mouse 2"
+        case 0x030D: model = "First generation"
+        default: model = "Magic Mouse"
+        }
+        return mouse.transport.isEmpty ? model : "\(model) · \(mouse.transport)"
+    }
+
+    private var stats: some View {
+        HStack(alignment: .top, spacing: 0) {
+            stat("Battery", state.batteryPercent.map { "\($0)%" } ?? "—")
+            stat("Fingers", "\(state.liveTouches.count)")
+            stat("Today", "\(state.gesturesToday)")
+        }
+        .padding(.vertical, 14)
+        .overlay(alignment: .top) { Rectangle().fill(Theme.hairline.opacity(0.6)).frame(height: 0.5) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hairline.opacity(0.6)).frame(height: 0.5) }
+    }
+
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            DataLabel(label)
+            Text(value).font(Typo.stat).tracking(-0.5)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder private var notices: some View {
+        VStack(spacing: 8) {
+            if !state.accessibilityGranted {
+                Notice(text: "Allow Accessibility so gestures can switch Spaces, go back and click.",
+                       action: "Allow") { state.requestAccessibility() }
+            }
+            if !state.conflicts.isEmpty {
+                Notice(text: "macOS also uses " + state.conflicts.map { "“\($0.settingName)”" }.joined(separator: " and ")
+                       + " on the mouse. Turn it off to avoid double actions.",
+                       action: "Fix") { Permissions.openMouseSettings() }
+            }
+        }
+    }
+
+    private func ago(_ date: Date?, now: Date) -> String {
+        guard let date else { return "" }
+        let s = max(0, Int(now.timeIntervalSince(date)))
+        if s < 60 { return "\(s)s ago" }
+        if s < 3600 { return "\(s / 60)m ago" }
+        return "\(s / 3600)h ago"
+    }
+}
+
+private struct Notice: View {
+    let text: String
+    let action: String
+    let perform: () -> Void
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Circle().fill(Theme.warn).frame(width: 6, height: 6)
+            Text(text).font(Typo.caption).foregroundStyle(Theme.warnText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button(action, action: perform).buttonStyle(.plain)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(Theme.accentText)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Theme.warnFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+// MARK: - Settings pane
+
+private struct SettingsPane: View {
+    @EnvironmentObject private var state: AppState
+    let pulse: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            header
+            HStack(alignment: .top, spacing: 22) {
+                VStack(spacing: 22) {
+                    RowGroup(title: "One finger") {
+                        gestureRow(.oneFingerTap)
+                    }
+                    RowGroup(title: "Two fingers") {
+                        ForEach([MouseGesture.twoFingerSwipeRight, .twoFingerSwipeLeft, .twoFingerSwipeUp,
+                                 .twoFingerSwipeDown, .twoFingerTap, .pinchOut, .pinchIn]) { gestureRow($0) }
+                    }
+                    RowGroup(title: "Behavior") {
+                        SliderRow(symbol: "ruler", title: "Swipe distance",
+                                  value: "\(Int(RecognizerConfig.swipeDistance(forSensitivity: state.sensitivity).rounded())) mm",
+                                  binding: Binding(get: { 1 - state.sensitivity }, set: { state.sensitivity = 1 - $0 }))
+                        ToggleRow(symbol: "hand.raised", title: "Ignore taps while moving",
+                                  detail: state.ignoredTaps > 0 ? "\(state.ignoredTaps) accidental taps blocked" : "Gripping the mouse never clicks",
+                                  isOn: $state.ignoreTapsWhileMoving)
+                        ToggleRow(symbol: "pause", title: "Pause scroll during gestures", isOn: $state.pauseScrollDuringGestures)
+                        ToggleRow(symbol: "arrow.up.arrow.down", title: "Invert up and down swipes", isOn: $state.invertVertical)
+                    }
+                }
+                VStack(spacing: 22) {
+                    RowGroup(title: "Scrolling") {
+                        if !state.shouldPauseScroll(fingers: 2) {
+                            InfoRow(glyph: GestureGlyph(fingers: 2, symbol: "arrow.up.and.down"),
+                                    title: "Two-finger up / down", value: "Scroll")
+                        }
+                        ToggleRow(symbol: "arrow.up.arrow.down.circle", title: "Reverse on mouse only",
+                                  detail: "Your trackpad keeps its direction", isOn: $state.reverseMouseScroll)
+                        SliderRow(symbol: "gauge.with.dots.needle.50percent", title: "Speed on mouse",
+                                  value: String(format: "%.1f×", state.mouseScrollSpeed),
+                                  binding: Binding(get: { (state.mouseScrollSpeed - 0.5) / 1.5 },
+                                                   set: { state.mouseScrollSpeed = ((0.5 + $0 * 1.5) * 10).rounded() / 10 }))
+                    }
+                    RowGroup(title: "Three fingers") {
+                        ForEach([MouseGesture.threeFingerSwipeLeft, .threeFingerSwipeRight, .threeFingerSwipeUp,
+                                 .threeFingerSwipeDown, .threeFingerTap]) { gestureRow($0) }
+                        ToggleRow(glyph: GestureGlyph(fingers: 3, symbol: "cursorarrow.click"),
+                                  title: "Click is middle click", isOn: $state.threeFingerClickIsMiddleClick)
+                    }
+                    RowGroup(title: "App") {
+                        ToggleRow(symbol: "rectangle.on.rectangle", title: "Floating guide",
+                                  detail: "Brief confirmation on screen · ⌥⌘G", isOn: $state.showHUD)
+                        ToggleRow(symbol: "menubar.rectangle", title: "Menu bar icon",
+                                  detail: state.showMenuBarIcon ? nil : "Open the app again to see this window",
+                                  isOn: $state.showMenuBarIcon)
+                        ToggleRow(symbol: "battery.25", title: "Low-battery reminder",
+                                  detail: "Alerts at 15% and 5%", isOn: $state.lowBatteryReminder)
+                        ToggleRow(symbol: "power", title: "Open at login", isOn: $state.launchAtLogin)
+                    }
+                    footer
+                }
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .bottom) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Gestures").font(Typo.title).tracking(-0.4)
+                Text(state.matchesTrackpad
+                     ? "Matches your trackpad · " + state.trackpadSummary.prefix(3).joined(separator: ", ").lowercased()
+                     : "Customized · differs from your trackpad")
+                    .font(Typo.body).foregroundStyle(Theme.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button(state.matchesTrackpad ? "Re-sync trackpad" : "Match my trackpad") { state.matchTrackpad() }
+                .buttonStyle(.plain)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Theme.accentText)
+                .help("Copy System Settings › Trackpad onto the mouse surface")
+        }
+    }
+
+    private func gestureRow(_ g: MouseGesture) -> some View {
+        GestureRow(gesture: g,
+                   action: Binding(get: { state.action(for: g) }, set: { state.setAction($0, for: g) }),
+                   flash: state.lastGesture == g, pulse: pulse)
+    }
+
+    private var footer: some View {
+        HStack(spacing: 12) {
+            Button("Restore defaults") { state.restoreDefaults() }.buttonStyle(.plain).foregroundStyle(Theme.accentText)
+            Spacer()
+            Link("GitHub", destination: URL(string: "https://github.com/rzrizaldy/magicmousepad")!)
+                .foregroundStyle(Theme.accentText)
+            Text("v\(Bundle.main.shortVersion)").font(Typo.mono).foregroundStyle(Theme.tertiary)
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Rows
+
+private struct RowShell<Trailing: View>: View {
+    let glyph: GestureGlyph
+    let title: String
+    var detail: String? = nil
+    @ViewBuilder var trailing: Trailing
+
+    var body: some View {
+        HStack(spacing: 12) {
+            glyph
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(Typo.row).lineLimit(1).fixedSize()
+                if let detail { Text(detail).font(.system(size: 11)).foregroundStyle(Theme.secondary).lineLimit(1) }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 44)
+    }
+}
+
+private struct GestureRow: View {
+    let gesture: MouseGesture
+    @Binding var action: ActionKind
+    var flash: Bool
+    var pulse: Int
+    @State private var lit = false
+
+    var body: some View {
+        RowShell(glyph: GestureGlyph(fingers: gesture.fingers, symbol: gesture.isTap ? nil : gesture.symbol),
+                 title: gesture.shortTitle) {
+            Menu {
+                Picker("Action", selection: $action) {
+                    Text(ActionKind.none.title).tag(ActionKind.none)
+                    ForEach(ActionKind.Group.allCases, id: \.self) { group in
+                        Section(group.rawValue) {
+                            ForEach(ActionKind.actions(in: group)) { Text($0.title).tag($0) }
+                        }
+                    }
+                }
+                .pickerStyle(.inline).labelsHidden()
             } label: {
-                Text(action.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(action == .none ? Theme.secondary : Theme.ink)
+                Text(action == .none ? "None" : action.title)
             }
             .menuStyle(.borderlessButton)
             .menuIndicator(.visible)
             .fixedSize()
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Color.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .foregroundStyle(action == .none ? Theme.tertiary : Theme.secondary)
             .accessibilityLabel(Text("\(gesture.title) action"))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(Color.white.opacity(highlight ? 0.95 : 0.7), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .strokeBorder(highlight ? AnyShapeStyle(Theme.gold) : AnyShapeStyle(Color.white), lineWidth: highlight ? 2 : 1))
-        .shadow(color: Theme.goldGlow.opacity(highlight ? 0.45 : 0), radius: 10)
+        .background(Theme.accent.opacity(lit ? 0.12 : 0))
         .onChange(of: pulse) { _ in
-            guard isFlashing else { return }
-            withAnimation(.easeOut(duration: 0.12)) { highlight = true }
-            withAnimation(.easeIn(duration: 0.6).delay(0.5)) { highlight = false }
+            guard flash else { return }
+            withAnimation(.easeOut(duration: 0.1)) { lit = true }
+            withAnimation(.easeIn(duration: 0.6).delay(0.4)) { lit = false }
+        }
+    }
+}
+
+private struct ToggleRow: View {
+    var glyph: GestureGlyph
+    let title: String
+    var detail: String? = nil
+    @Binding var isOn: Bool
+
+    init(symbol: String, title: String, detail: String? = nil, isOn: Binding<Bool>) {
+        self.init(glyph: GestureGlyph(symbol: symbol), title: title, detail: detail, isOn: isOn)
+    }
+
+    init(glyph: GestureGlyph, title: String, detail: String? = nil, isOn: Binding<Bool>) {
+        self.glyph = glyph
+        self.title = title
+        self.detail = detail
+        self._isOn = isOn
+    }
+
+    var body: some View {
+        RowShell(glyph: glyph, title: title, detail: detail) {
+            Toggle(title, isOn: $isOn).toggleStyle(.switch).labelsHidden().controlSize(.small).tint(Theme.good)
+        }
+    }
+}
+
+private struct SliderRow: View {
+    let symbol: String
+    let title: String
+    let value: String
+    @Binding var binding: Double
+
+    init(symbol: String, title: String, value: String, binding: Binding<Double>) {
+        self.symbol = symbol
+        self.title = title
+        self.value = value
+        self._binding = binding
+    }
+
+    var body: some View {
+        RowShell(glyph: GestureGlyph(symbol: symbol), title: title) {
+            Slider(value: $binding, in: 0...1).frame(minWidth: 70, maxWidth: 110).controlSize(.small).tint(Theme.accent)
+                .accessibilityLabel(Text(title))
+            Text(value).font(Typo.mono).foregroundStyle(Theme.secondary).frame(width: 44, alignment: .trailing)
+        }
+    }
+}
+
+private struct InfoRow: View {
+    let glyph: GestureGlyph
+    let title: String
+    let value: String
+
+    var body: some View {
+        RowShell(glyph: glyph, title: title) {
+            Text(value).font(Typo.body).foregroundStyle(Theme.secondary)
         }
     }
 }

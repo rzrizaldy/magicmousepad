@@ -5,9 +5,11 @@ import SwiftUI
 struct MagicMousePadApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var state = AppState.shared
+    /// Same UserDefaults key AppState writes; @AppStorage is the loop-free way to drive isInserted.
+    @AppStorage("showMenuBarIcon") private var showMenuBarIcon = true
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showMenuBarIcon) {
             MenuContent().environmentObject(state)
         } label: {
             Image(systemName: state.enabled ? "magicmouse.fill" : "magicmouse")
@@ -56,8 +58,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "--snapshot"), i + 1 < args.count {
             renderSnapshot(to: URL(fileURLWithPath: args[i + 1]))
-            NSApp.terminate(nil)
-            return
+            exit(0) // snapshot mode never starts the app proper
         }
 
         AppState.shared.start()
@@ -87,7 +88,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             w.titlebarAppearsTransparent = true
             w.titleVisibility = .hidden
             w.isMovableByWindowBackground = true
-            w.appearance = NSAppearance(named: .aqua)
             w.isReleasedWhenClosed = false
             w.delegate = self
             w.center()
@@ -95,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         AppState.shared.refreshConflicts()
         AppState.shared.refreshBattery()
+        AppState.shared.syncMenuBarIconSetting()
         AppState.shared.setPreviewActive(true)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -104,9 +105,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private func renderSnapshot(to url: URL) {
         AppState.shared.loadDemoState()
         let view = NSHostingView(rootView: MainView().environmentObject(AppState.shared))
-        let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 1100, height: 720),
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: 0, width: 1120, height: 760),
                               styleMask: [.borderless], backing: .buffered, defer: false)
-        window.appearance = NSAppearance(named: .aqua)
+        if let mode = ProcessInfo.processInfo.environment["MMP_APPEARANCE"] { window.appearance = NSAppearance(named: mode == "dark" ? .darkAqua : .aqua) }
         window.contentView = view
         window.orderFrontRegardless()
         RunLoop.main.run(until: Date().addingTimeInterval(0.6))

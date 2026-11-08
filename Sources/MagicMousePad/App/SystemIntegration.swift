@@ -1,4 +1,5 @@
 import AppKit
+import UserNotifications
 import ApplicationServices
 import IOKit
 import MagicMousePadCore
@@ -106,5 +107,27 @@ struct NativeGestureConflict: Identifiable, Equatable {
             result.append(.init(id: "doubletap", settingName: "Mission Control"))
         }
         return result
+    }
+}
+
+/// Local notifications (battery reminders). Nothing is ever sent off the Mac.
+enum Notifier {
+    static func requestAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    static func batteryAlert(_ alert: BatteryReminder.Alert) {
+        let content = UNMutableNotificationContent()
+        switch alert {
+        case .low(let p):
+            content.title = "Magic Mouse at \(p)%"
+            content.body = "Plug it in when you step away — it charges from underneath, so tonight is a good time."
+        case .critical(let p):
+            content.title = "Magic Mouse almost empty (\(p)%)"
+            content.body = "Charge it now so it doesn't die in the middle of something."
+            content.sound = .default
+        }
+        let request = UNNotificationRequest(identifier: "battery", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
     }
 }

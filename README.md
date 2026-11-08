@@ -15,7 +15,11 @@ Free, open source, and native to macOS.</p>
   <a href="#build-from-source">Build</a>
 </p>
 
-<p align="center"><img src="docs/screenshot.png" width="860" alt="MagicMousePad main window"></p>
+<p align="center">
+  <img src="docs/screenshot.png" width="860" alt="MagicMousePad main window, light">
+  <br>
+  <img src="docs/screenshot-dark.png" width="860" alt="MagicMousePad main window, dark">
+</p>
 
 ---
 
@@ -52,7 +56,20 @@ Four-finger trackpad gestures fold into three-finger ones, since three is the mo
 
 Every gesture can be reassigned to: Click, Secondary Click, Middle Click, Look Up, Mission Control, App Exposé, Show Desktop, Show Apps, Next/Previous Space, Back, Forward, Next/Previous Tab, Close Tab, Zoom In/Out, Actual Size — or nothing.
 
-The **floating guide** (a small glass card confirming each gesture) can be hidden with the switch in the window, from the menu bar, or with **⌥⌘G**.
+### Fixes for the most common Magic Mouse complaints
+
+What people ask for most in Magic Mouse threads, issue trackers and reviews, and what the app does about it:
+
+| Complaint | What MagicMousePad does |
+|---|---|
+| No middle click | Three-finger physical click (drag works too) |
+| Resting fingers trigger things by accident | Taps only count from an empty surface, and **taps are ignored while you're moving or gripping the mouse** |
+| Scroll direction is shared with the trackpad | **Reverse direction and speed for the Magic Mouse only** — the trackpad keeps its own |
+| The charging port is underneath | **Low-battery reminder** at 15% and 5%, so you charge it while you're away |
+| Menu bar is crowded | **Hide the menu bar icon**; open the app again to get the window back |
+| Gestures fire twice with macOS's own | Detects overlapping built-in mouse gestures and links to the setting |
+
+The **floating guide** (a small capsule confirming each gesture) can be hidden with the switch in the window, from the menu bar, or with **⌥⌘G**.
 
 ## Install
 

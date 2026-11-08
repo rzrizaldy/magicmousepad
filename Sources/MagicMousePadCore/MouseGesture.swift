@@ -67,6 +67,8 @@ public enum MouseGesture: String, CaseIterable, Codable, Identifiable, Sendable 
         }
     }
 
+    public var isTap: Bool { self == .oneFingerTap || self == .twoFingerTap || self == .threeFingerTap }
+
     public enum Direction: Sendable { case left, right, up, down }
 
     public static func swipe(fingers: Int, direction: Direction) -> MouseGesture? {

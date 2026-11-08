@@ -18,6 +18,11 @@ final class AppState: ObservableObject {
     @Published var threeFingerClickIsMiddleClick: Bool { didSet { save() } }
     @Published var showHUD: Bool { didSet { save() } }
     @Published var invertVertical: Bool { didSet { save(); pushConfig() } }
+    @Published var showMenuBarIcon: Bool { didSet { save() } }
+    @Published var lowBatteryReminder: Bool { didSet { save() } }
+    @Published var reverseMouseScroll: Bool { didSet { save() } }
+    @Published var mouseScrollSpeed: Double { didSet { save() } }
+    @Published var ignoreTapsWhileMoving: Bool { didSet { save() } }
 
     // MARK: Live status
 
@@ -31,6 +36,9 @@ final class AppState: ObservableObject {
     /// What "Match my trackpad" copied, shown in the window.
     @Published private(set) var trackpadSummary: [String] = []
     @Published private(set) var matchesTrackpad = false
+    /// Taps ignored because the mouse was moving (shown so the guard is visible, not magic).
+    @Published private(set) var ignoredTaps = 0
+    @Published private(set) var gesturesToday = 0
     @Published var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled {
         didSet { LaunchAtLogin.set(launchAtLogin) }
     }
@@ -41,6 +49,9 @@ final class AppState: ObservableObject {
     private let defaults = UserDefaults.standard
     private let eventFilter = EventFilter()
     private var permissionTimer: Timer?
+    private var pointerGuard = PointerMotionGuard()
+    private var batteryReminder = BatteryReminder()
+    private var askedForNotifications = false
 
     private init() {
         let d = UserDefaults.standard
@@ -51,6 +62,11 @@ final class AppState: ObservableObject {
             Keys.threeFingerClick: true,
             Keys.showHUD: true,
             Keys.invertVertical: false,
+            Keys.showMenuBarIcon: true,
+            Keys.lowBatteryReminder: true,
+            Keys.reverseMouseScroll: false,
+            Keys.mouseScrollSpeed: 1.0,
+            Keys.ignoreTapsWhileMoving: true,
         ])
         enabled = d.bool(forKey: Keys.enabled)
         sensitivity = d.double(forKey: Keys.sensitivity)
@@ -58,6 +74,12 @@ final class AppState: ObservableObject {
         threeFingerClickIsMiddleClick = d.bool(forKey: Keys.threeFingerClick)
         showHUD = d.bool(forKey: Keys.showHUD)
         invertVertical = d.bool(forKey: Keys.invertVertical)
+        showMenuBarIcon = d.bool(forKey: Keys.showMenuBarIcon)
+        lowBatteryReminder = d.bool(forKey: Keys.lowBatteryReminder)
+        reverseMouseScroll = d.bool(forKey: Keys.reverseMouseScroll)
+        mouseScrollSpeed = d.double(forKey: Keys.mouseScrollSpeed)
+        ignoreTapsWhileMoving = d.bool(forKey: Keys.ignoreTapsWhileMoving)
+        gesturesToday = d.string(forKey: Keys.gesturesDay) == Self.today ? d.integer(forKey: Keys.gesturesCount) : 0
         mapping = Self.loadMapping(from: d)
     }
 
@@ -84,6 +106,14 @@ final class AppState: ObservableObject {
             return self.enabled && self.threeFingerClickIsMiddleClick && TouchEngine.shared.currentFingerCount >= 3
         }
         eventFilter.onPhysicalClick = { TouchEngine.shared.noteClick() }
+        eventFilter.fingersOnMouse = { TouchEngine.shared.currentFingerCount }
+        eventFilter.scrollAdjustment = { [weak self] in
+            guard let self, self.enabled else { return ScrollAdjustment() }
+            return ScrollAdjustment(reverse: self.reverseMouseScroll, speed: self.mouseScrollSpeed)
+        }
+        eventFilter.onPointerMotion = { [weak self] dx, dy in
+            self?.pointerGuard.record(dx: dx, dy: dy, at: ProcessInfo.processInfo.systemUptime)
+        }
 
         // First launch: make the mouse surface behave exactly like this Mac's trackpad.
         if !defaults.bool(forKey: Keys.matchedTrackpad) { matchTrackpad() }
@@ -135,9 +165,9 @@ final class AppState: ObservableObject {
         lastGesture = .twoFingerSwipeRight
         lastGestureDate = Date()
         batteryPercent = 100
+        gesturesToday = 37
         accessibilityGranted = true
-        TouchEngine.shared.onDevicesChanged = { [weak self] in self?.devices = $0 }
-        TouchEngine.shared.start()
+        devices = [.demo]
     }
 
     // MARK: Gestures
@@ -146,8 +176,13 @@ final class AppState: ObservableObject {
         guard enabled else { return }
         let action = mapping[gesture] ?? .none
         guard action != .none else { return }
+        if gesture.isTap, ignoreTapsWhileMoving, pointerGuard.isMoving(at: ProcessInfo.processInfo.systemUptime) {
+            ignoredTaps += 1 // gripping or moving the mouse, not tapping
+            return
+        }
         lastGesture = gesture
         lastGestureDate = Date()
+        countGesture()
         ActionPerformer.perform(action)
         if showHUD { HUDController.shared.show(gesture: gesture, action: action) }
     }
@@ -168,6 +203,12 @@ final class AppState: ObservableObject {
         case 2: return action(for: .twoFingerSwipeUp) != .none || action(for: .twoFingerSwipeDown) != .none
         default: return hasActions(forFingers: 3)
         }
+    }
+
+    /// The menu bar icon can also be removed by ⌘-dragging it; pick that up from UserDefaults.
+    func syncMenuBarIconSetting() {
+        let stored = defaults.bool(forKey: Keys.showMenuBarIcon)
+        if stored != showMenuBarIcon { showMenuBarIcon = stored }
     }
 
     /// Copies the trackpad's gesture settings onto the mouse surface.
@@ -198,6 +239,12 @@ final class AppState: ObservableObject {
 
     func refreshBattery() {
         batteryPercent = mouse.flatMap { Battery.percent(forProductID: $0.productID) }
+        guard let percent = batteryPercent, lowBatteryReminder else { return }
+        if percent < 30, !askedForNotifications {
+            askedForNotifications = true
+            Notifier.requestAuthorization()
+        }
+        if let alert = batteryReminder.update(percent: percent) { Notifier.batteryAlert(alert) }
     }
 
     // MARK: Persistence
@@ -210,6 +257,13 @@ final class AppState: ObservableObject {
         static let threeFingerClick = "threeFingerClickIsMiddleClick"
         static let showHUD = "showHUD"
         static let invertVertical = "invertVertical"
+        static let showMenuBarIcon = "showMenuBarIcon"
+        static let lowBatteryReminder = "lowBatteryReminder"
+        static let reverseMouseScroll = "reverseMouseScroll"
+        static let mouseScrollSpeed = "mouseScrollSpeed"
+        static let ignoreTapsWhileMoving = "ignoreTapsWhileMoving"
+        static let gesturesDay = "gesturesDay"
+        static let gesturesCount = "gesturesCount"
         static let matchedTrackpad = "matchedTrackpad"
     }
 
@@ -233,6 +287,27 @@ final class AppState: ObservableObject {
         defaults.set(threeFingerClickIsMiddleClick, forKey: Keys.threeFingerClick)
         defaults.set(showHUD, forKey: Keys.showHUD)
         defaults.set(invertVertical, forKey: Keys.invertVertical)
+        defaults.set(showMenuBarIcon, forKey: Keys.showMenuBarIcon)
+        defaults.set(lowBatteryReminder, forKey: Keys.lowBatteryReminder)
+        defaults.set(reverseMouseScroll, forKey: Keys.reverseMouseScroll)
+        defaults.set(mouseScrollSpeed, forKey: Keys.mouseScrollSpeed)
+        defaults.set(ignoreTapsWhileMoving, forKey: Keys.ignoreTapsWhileMoving)
+    }
+
+    private static var today: String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: Date())
+    }
+
+    private func countGesture() {
+        let day = Self.today
+        if defaults.string(forKey: Keys.gesturesDay) != day {
+            defaults.set(day, forKey: Keys.gesturesDay)
+            gesturesToday = 0
+        }
+        gesturesToday += 1
+        defaults.set(gesturesToday, forKey: Keys.gesturesCount)
     }
 
     private func pushConfig() {

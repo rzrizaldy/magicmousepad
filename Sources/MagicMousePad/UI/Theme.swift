@@ -1,115 +1,131 @@
+import AppKit
 import SwiftUI
 
-/// "Golden-era Mac" visual language: pearl backgrounds, frosted glass, champagne gold.
+/// Calm, data-first visual language (in the spirit of Flighty):
+/// plain surfaces and hairlines, one warm accent, colour only for status,
+/// small uppercase labels over large tabular numbers. Light and dark.
 enum Theme {
-    static let ink = Color(red: 0.114, green: 0.114, blue: 0.122)        // #1D1D1F
-    static let secondary = Color(red: 0.369, green: 0.369, blue: 0.40)   // #5E5E66
-    static let goldText = Color(red: 0.478, green: 0.341, blue: 0.063)   // #7A5710
-    static let goldDeep = Color(red: 0.843, green: 0.631, blue: 0.243)   // #D7A13E
-    static let goldLight = Color(red: 0.953, green: 0.835, blue: 0.561)  // #F3D58F
-    static let goldPale = Color(red: 1.0, green: 0.965, blue: 0.875)     // #FFF6DF
-    static let goldGlow = Color(red: 0.906, green: 0.690, blue: 0.290)   // #E7B04A
-    static let success = Color(red: 0.204, green: 0.780, blue: 0.349)
-    static let warning = Color(red: 1.0, green: 0.62, blue: 0.04)
+    // Surfaces
+    static let canvas = dynamic(light: 0xF5F5F3, dark: 0x141416)
+    static let surface = dynamic(light: 0xFFFFFF, dark: 0x1F1F22)
+    static let well = dynamic(light: 0xF0F0EE, dark: 0x2A2A2E)
+    static let hairline = Color(nsColor: .separatorColor)
 
-    static let gold = LinearGradient(colors: [goldLight, goldDeep], startPoint: .top, endPoint: .bottom)
-    static let goldTile = LinearGradient(colors: [goldPale, Color(red: 0.953, green: 0.875, blue: 0.682)],
-                                         startPoint: .top, endPoint: .bottom)
+    // Text
+    static let ink = Color(nsColor: .labelColor)
+    static let secondary = Color(nsColor: .secondaryLabelColor)
+    static let tertiary = Color(nsColor: .tertiaryLabelColor)
+
+    // Accent: warm amber, used for fingers, links and selection only.
+    static let accent = dynamic(light: 0xE89A12, dark: 0xF2A93B)
+    static let accentText = dynamic(light: 0x9A5F00, dark: 0xF2B65A)
+
+    // Status
+    static let good = dynamic(light: 0x1FA855, dark: 0x34C66A)
+    static let goodFill = dynamic(light: 0xE3F6E8, dark: 0x163A22)
+    static let goodText = dynamic(light: 0x116B2F, dark: 0x7FDB9C)
+    static let warn = dynamic(light: 0xE08A00, dark: 0xF2A93B)
+    static let warnFill = dynamic(light: 0xFFF4E0, dark: 0x3A2A10)
+    static let warnText = dynamic(light: 0x6B4500, dark: 0xF6CC88)
+    static let idleFill = dynamic(light: 0xEDEDEB, dark: 0x2A2A2E)
+
+    private static func dynamic(light: UInt32, dark: UInt32) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            let hex = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light
+            return NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                           green: CGFloat((hex >> 8) & 0xFF) / 255,
+                           blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        })
+    }
 }
 
-/// Window backdrop: warm champagne glow top-left, cool sky bottom-right, pearl in between.
-struct PearlBackground: View {
+/// Type scale. SF Pro throughout (the system picks Display at large sizes, Text below);
+/// numbers use tabular figures so live values don't jitter; times use SF Mono.
+enum Typo {
+    static let hero = Font.system(size: 30, weight: .heavy)
+    static let title = Font.system(size: 22, weight: .heavy)
+    static let stat = Font.system(size: 26, weight: .bold).monospacedDigit()
+    static let row = Font.system(size: 13, weight: .medium)
+    static let body = Font.system(size: 13)
+    static let caption = Font.system(size: 12)
+    static let mono = Font.system(size: 12, weight: .medium, design: .monospaced)
+    static let label = Font.system(size: 10, weight: .bold)
+}
+
+/// Small uppercase section / data label.
+struct DataLabel: View {
+    let text: String
+    init(_ text: String) { self.text = text }
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [Color(red: 1, green: 0.992, blue: 0.973),
-                                    Color(red: 0.961, green: 0.953, blue: 0.933),
-                                    Color(red: 0.933, green: 0.949, blue: 0.973)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-            RadialGradient(colors: [Color(red: 0.984, green: 0.922, blue: 0.769), .clear],
-                           center: UnitPoint(x: 0.15, y: 0.05), startRadius: 0, endRadius: 560)
-            RadialGradient(colors: [Color(red: 0.867, green: 0.910, blue: 0.969), .clear],
-                           center: UnitPoint(x: 0.95, y: 1.0), startRadius: 0, endRadius: 520)
+        Text(text.uppercased()).font(Typo.label).tracking(0.8).foregroundStyle(Theme.secondary)
+    }
+}
+
+/// A white rounded group with hairline separators between rows.
+struct RowGroup<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            DataLabel(title).padding(.leading, 4)
+            VStack(spacing: 0) {
+                _VariadicView.Tree(Separated()) { content }
+            }
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hairline.opacity(0.6), lineWidth: 0.5))
         }
-        .ignoresSafeArea()
     }
-}
 
-/// Frosted glass card with a crisp top highlight and a warm soft shadow.
-struct GlassCard: ViewModifier {
-    var radius: CGFloat = 24
-    var padding: CGFloat = 20
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        content
-            .padding(padding)
-            .background(.ultraThinMaterial, in: shape)
-            .background(Color.white.opacity(0.45), in: shape)
-            .overlay(shape.strokeBorder(
-                LinearGradient(colors: [.white, .white.opacity(0.55)], startPoint: .top, endPoint: .bottom),
-                lineWidth: 1))
-            .shadow(color: Color(red: 0.47, green: 0.38, blue: 0.16).opacity(0.12), radius: 22, y: 14)
-    }
-}
-
-extension View {
-    func glassCard(radius: CGFloat = 24, padding: CGFloat = 20) -> some View {
-        modifier(GlassCard(radius: radius, padding: padding))
-    }
-}
-
-/// Gold capsule switch.
-struct GoldToggleStyle: ToggleStyle {
-    var width: CGFloat = 40
-    var height: CGFloat = 24
-
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 10) {
-            configuration.label
-            Spacer(minLength: 0)
-            ZStack(alignment: configuration.isOn ? .trailing : .leading) {
-                Capsule()
-                    .fill(configuration.isOn ? AnyShapeStyle(Theme.gold) : AnyShapeStyle(Color.black.opacity(0.10)))
-                    .overlay(Capsule().strokeBorder(Color.white.opacity(configuration.isOn ? 0.6 : 0), lineWidth: 1))
-                    .shadow(color: Theme.goldDeep.opacity(configuration.isOn ? 0.35 : 0), radius: 5, y: 2)
-                Circle()
-                    .fill(LinearGradient(colors: [.white, Color(white: 0.95)], startPoint: .top, endPoint: .bottom))
-                    .shadow(color: .black.opacity(0.25), radius: 1.5, y: 1)
-                    .padding(2)
+    /// Inserts a hairline between children.
+    private struct Separated: _VariadicView_MultiViewRoot {
+        func body(children: _VariadicView.Children) -> some View {
+            ForEach(Array(children.enumerated()), id: \.offset) { index, child in
+                if index > 0 { Rectangle().fill(Theme.hairline.opacity(0.6)).frame(height: 0.5).padding(.leading, 54) }
+                child
             }
-            .frame(width: width, height: height)
-            .contentShape(Capsule())
-            .onTapGesture {
-                withAnimation(.spring(response: 0.28, dampingFraction: 0.75)) { configuration.isOn.toggle() }
-            }
-            .accessibilityElement()
-            .accessibilityLabel(Text("Toggle"))
-            .accessibilityValue(Text(configuration.isOn ? "On" : "Off"))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityAction { configuration.isOn.toggle() }
         }
     }
 }
 
-/// Primary gold button.
-struct GoldButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(Color(red: 0.24, green: 0.17, blue: 0.02))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(Theme.gold, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
-                .strokeBorder(Color.white.opacity(0.55), lineWidth: 1))
-            .shadow(color: Theme.goldDeep.opacity(0.35), radius: 4, y: 2)
-            .opacity(configuration.isPressed ? 0.8 : 1)
+/// Status chip ("ACTIVE", "PAUSED", …).
+struct StatusBadge: View {
+    let text: String
+    let dot: Color
+    let fill: Color
+    let ink: Color
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Circle().fill(dot).frame(width: 6, height: 6)
+            Text(text.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.7)
+        }
+        .foregroundStyle(ink)
+        .padding(.horizontal, 9)
+        .padding(.vertical, 4)
+        .background(fill, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 }
 
-struct StatusDot: View {
-    var color: Color
+/// 28 pt glyph box showing how many fingers and which way.
+struct GestureGlyph: View {
+    var fingers: Int = 0
+    var symbol: String?
+
     var body: some View {
-        Circle().fill(color).frame(width: 8, height: 8).shadow(color: color.opacity(0.7), radius: 4)
+        HStack(spacing: 2) {
+            if fingers > 0 {
+                HStack(spacing: 1.5) {
+                    ForEach(0..<fingers, id: \.self) { _ in Circle().fill(Theme.accent).frame(width: 4, height: 4) }
+                }
+            }
+            if let symbol {
+                Image(systemName: symbol).font(.system(size: fingers > 0 ? 9 : 12, weight: .semibold))
+                    .foregroundStyle(Theme.ink.opacity(0.75))
+            }
+        }
+        .frame(width: 28, height: 28)
+        .background(Theme.well, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .accessibilityHidden(true)
     }
 }
